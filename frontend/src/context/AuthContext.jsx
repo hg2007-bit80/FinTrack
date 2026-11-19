@@ -54,8 +54,8 @@ export const AuthProvider = ({ children }) => {
     return response
   }
 
-  const registerAdmin = async (name, email, password, invitationCode) => {
-    const response = await registerAdminUser({ name, email, password, invitationCode })
+  const registerAdmin = async (name, email, password) => {
+    const response = await registerAdminUser({ name, email, password })
     setUser(response.user)
     setToken(response.token)
     return response

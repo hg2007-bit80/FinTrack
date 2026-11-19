@@ -95,22 +95,11 @@ router.post('/register', authLimiter, registerValidation, async (req, res) => {
 })
 
 // -------------------------------------------------------------
-// 2. ADMIN PORTAL REGISTRATION (Requires Backend Invitation Code)
+// 2. ADMIN PORTAL REGISTRATION (Simple: Name, Email, Password)
 // -------------------------------------------------------------
 router.post('/admin/register', authLimiter, adminRegisterValidation, async (req, res) => {
   try {
-    const { name, email, password, invitationCode } = req.body
-
-    // Verify invitation code strictly against backend environment variable
-    const validInvitationCode = process.env.ADMIN_INVITATION_CODE || 'FINTRACK-ADMIN-2026'
-
-    if (!invitationCode || invitationCode.trim() !== validInvitationCode) {
-      return res.status(403).json({
-        success: false,
-        message:
-          'Security verification failed: Invalid administrator invitation code. Admin registration rejected.'
-      })
-    }
+    const { name, email, password } = req.body
 
     const existingUser = await User.findOne({ email })
     if (existingUser) {

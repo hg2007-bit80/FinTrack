@@ -591,7 +591,7 @@ export default function AdminDashboard({ onExit, onLogout }) {
                 onClick={onExit}
                 className="w-full text-center text-xs text-gray-400 hover:text-gray-600"
               >
-                ← Return to FinTrack App
+                ← Back to Login / Portal Selection
               </button>
             </form>
           ) : (
@@ -655,7 +655,7 @@ export default function AdminDashboard({ onExit, onLogout }) {
                 onClick={onExit}
                 className="w-full text-center text-xs text-gray-400 hover:text-gray-600"
               >
-                ← Return to FinTrack App
+                ← Back to Login / Portal Selection
               </button>
             </form>
           )}
@@ -753,13 +753,6 @@ export default function AdminDashboard({ onExit, onLogout }) {
               <LogOut size={15} />
             </button>
           </div>
-
-          <button
-            onClick={onExit}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition shadow-sm"
-          >
-            <ArrowLeft size={14} /> Back to User App
-          </button>
         </div>
       </aside>
 
@@ -834,15 +827,6 @@ export default function AdminDashboard({ onExit, onLogout }) {
                       className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition"
                     >
                       <Settings size={14} /> System Settings
-                    </button>
-                    <button
-                      onClick={() => {
-                        setAdminMenuOpen(false)
-                        onExit()
-                      }}
-                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition"
-                    >
-                      <ArrowLeft size={14} /> Switch to User App
                     </button>
                   </div>
 

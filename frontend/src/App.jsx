@@ -335,7 +335,7 @@ function App() {
     }
 
     // Authenticated administrator -> render AdminDashboard
-    return <AdminDashboard onExit={() => navigate('/dashboard')} />
+    return <AdminDashboard onExit={() => navigate('/login')} />
   }
 
   // =========================================================================
@@ -345,6 +345,12 @@ function App() {
   // Guard: if not authenticated and accessing /dashboard, redirect to /login
   if (!isAuthenticated && (currentPath === '/dashboard' || currentPath.startsWith('/dashboard'))) {
     navigate('/login', { replace: true })
+    return null
+  }
+
+  // Admin accounts belong strictly to the Admin Dashboard
+  if (isAuthenticated && user?.role === 'admin' && (currentPath === '/dashboard' || currentPath === '/')) {
+    navigate('/admin', { replace: true })
     return null
   }
   const stats = [
@@ -436,7 +442,7 @@ function App() {
           </div>
 
           <p className="mt-8 mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
-            Client Portal
+            Menu
           </p>
 
           <nav className="space-y-1.5">
@@ -463,21 +469,6 @@ function App() {
               )
             })}
           </nav>
-
-          {/* Admin Portal Quick Link */}
-          <div className="mt-6 pt-4 border-t border-gray-100">
-            <button
-              onClick={() => navigate('/admin')}
-              className="flex w-full items-center justify-between rounded-xl border border-purple-200 bg-purple-50/60 px-3.5 py-2.5 text-left text-xs font-semibold text-[#7657F6] hover:bg-purple-100/70 transition shadow-sm"
-            >
-              <span className="flex items-center gap-2">
-                <ShieldCheck size={16} /> Admin Portal
-              </span>
-              <span className="rounded bg-[#7657F6] px-1.5 py-0.5 text-[9px] font-bold text-white uppercase">
-                /admin
-              </span>
-            </button>
-          </div>
         </div>
 
         {/* User profile / Auth panel in sidebar */}
@@ -525,27 +516,6 @@ function App() {
 
       {/* Main content */}
       <main className="min-w-0 flex-1 p-5 md:p-8 overflow-y-auto">
-        {/* Administrator Notice if an Admin accesses Client Dashboard */}
-        {user?.role === 'admin' && (
-          <div className="mb-6 flex items-center justify-between gap-3 rounded-2xl border border-purple-200 bg-purple-50 p-4 text-xs text-purple-900 shadow-sm">
-            <div className="flex items-center gap-2.5">
-              <ShieldCheck size={18} className="shrink-0 text-[#7657F6]" />
-              <div>
-                <p className="font-bold">Logged in as Administrator</p>
-                <p className="text-purple-700">
-                  You are viewing the Client Portal. Access live metrics, user management, and Socket.IO activity in the Admin Dashboard.
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => navigate('/admin')}
-              className="flex items-center gap-1.5 rounded-xl bg-[#7657F6] px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-purple-700 transition"
-            >
-              Open Admin Dashboard <ArrowRight size={14} />
-            </button>
-          </div>
-        )}
-
         {/* Maintenance Mode Banner */}
         {maintenance?.active && (
           <div className="mb-6 flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900 shadow-sm">
@@ -647,18 +617,6 @@ function App() {
                       >
                         <Settings size={14} /> Account Settings
                       </button>
-
-                      {user?.role === 'admin' && (
-                        <button
-                          onClick={() => {
-                            setUserMenuOpen(false)
-                            navigate('/admin')
-                          }}
-                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-[#7657F6] hover:bg-purple-50 transition"
-                        >
-                          <ShieldCheck size={14} /> Admin Portal
-                        </button>
-                      )}
                     </div>
 
                     <div className="border-t border-gray-100 pt-1">

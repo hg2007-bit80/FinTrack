@@ -39,7 +39,7 @@ const registerValidation = [
   validate
 ]
 
-// Validation rules for Administrator Registration
+// Validation rules for Administrator Registration (Simple: name, email, password)
 const adminRegisterValidation = [
   body('name')
     .trim()
@@ -59,10 +59,6 @@ const adminRegisterValidation = [
     .withMessage('Password is required')
     .isLength({ min: 6 })
     .withMessage('Password must be at least 6 characters long'),
-  body('invitationCode')
-    .trim()
-    .notEmpty()
-    .withMessage('Administrator invitation code is required'),
   validate
 ]
 

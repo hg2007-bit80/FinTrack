@@ -29,8 +29,7 @@ export default function AuthPage({ isModal = false, onClose, initialPortal = 'cl
     name: '',
     email: '',
     password: '',
-    confirmPassword: '',
-    invitationCode: ''
+    confirmPassword: ''
   })
 
   const [loading, setLoading] = useState(false)
@@ -79,10 +78,6 @@ export default function AuthPage({ isModal = false, onClose, initialPortal = 'cl
       if (formData.password !== formData.confirmPassword) {
         errs.confirmPassword = 'Passwords do not match'
       }
-
-      if (portal === 'admin' && !formData.invitationCode.trim()) {
-        errs.invitationCode = 'Admin registration invitation code is required'
-      }
     }
 
     setFieldErrors(errs)
@@ -102,12 +97,11 @@ export default function AuthPage({ isModal = false, onClose, initialPortal = 'cl
     try {
       if (isRegister) {
         if (portal === 'admin') {
-          // Admin registration with verified invitation code
+          // Admin registration
           const res = await registerAdmin(
             formData.name.trim(),
             formData.email.trim(),
-            formData.password,
-            formData.invitationCode.trim()
+            formData.password
           )
           setSuccessMessage('Administrator account created! Redirecting to Admin Dashboard...')
           setTimeout(() => {
@@ -419,31 +413,6 @@ export default function AuthPage({ isModal = false, onClose, initialPortal = 'cl
           </div>
         )}
 
-        {/* Admin Registration Invitation Code */}
-        {isRegister && portal === 'admin' && (
-          <div className="rounded-2xl border border-purple-200 bg-purple-50/50 p-3.5">
-            <label className="mb-1 block text-xs font-bold text-purple-900 flex items-center gap-1.5">
-              <KeyRound size={14} className="text-[#7657F6]" /> Admin Invitation Code
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. FINTRACK-ADMIN-2026"
-              value={formData.invitationCode}
-              onChange={(e) => setFormData({ ...formData, invitationCode: e.target.value })}
-              className={`w-full rounded-xl border bg-white py-2 px-3 text-xs outline-none transition ${
-                fieldErrors.invitationCode
-                  ? 'border-red-400 focus:border-red-500'
-                  : 'border-purple-200 focus:border-[#7657F6]'
-              }`}
-            />
-            <p className="mt-1.5 text-[10px] text-purple-700">
-              Required: Verified on backend against administrator invitation security policy.
-            </p>
-            {fieldErrors.invitationCode && (
-              <p className="mt-1 text-[11px] text-red-500">{fieldErrors.invitationCode}</p>
-            )}
-          </div>
-        )}
 
         {/* Submit Button */}
         <button
