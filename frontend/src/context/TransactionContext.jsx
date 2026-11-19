@@ -65,6 +65,14 @@ export const TransactionProvider = ({ children }) => {
     if (!socket) return
 
     const handleCreated = (newTx) => {
+      // If transaction belongs to a different user, ignore it
+      const currentUserId = (user?._id || user?.id || '').toString()
+      const txUserId = (newTx.user?._id || newTx.user || '').toString()
+
+      if (currentUserId && txUserId && txUserId !== currentUserId) {
+        return
+      }
+
       const formatted = formatTransaction(newTx)
       setTransactions((prev) => {
         // Prevent duplicate if already added locally
@@ -74,6 +82,13 @@ export const TransactionProvider = ({ children }) => {
     }
 
     const handleUpdated = (updatedTx) => {
+      const currentUserId = (user?._id || user?.id || '').toString()
+      const txUserId = (updatedTx.user?._id || updatedTx.user || '').toString()
+
+      if (currentUserId && txUserId && txUserId !== currentUserId) {
+        return
+      }
+
       const formatted = formatTransaction(updatedTx)
       setTransactions((prev) =>
         prev.map((t) => (t.id === formatted.id ? formatted : t))
@@ -93,7 +108,7 @@ export const TransactionProvider = ({ children }) => {
       socket.off('transaction:updated', handleUpdated)
       socket.off('transaction:deleted', handleDeleted)
     }
-  }, [socket])
+  }, [socket, user])
 
   const createTransaction = async (txData) => {
     const res = await apiAddTransaction(txData)

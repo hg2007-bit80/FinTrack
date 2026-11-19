@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { setNavigateFn } from './context/AuthContext'
 import {
   LayoutDashboard,
@@ -57,15 +57,6 @@ import SavingsPage from './components/SavingsPage'
 import RecurringPage from './components/RecurringPage'
 import ReportsPage from './components/ReportsPage'
 import { importCSV, exportCSV } from './services/csvService'
-
-const monthlyData = [
-  { month: 'Jan', income: 45000, expenses: 22000 },
-  { month: 'Feb', income: 52000, expenses: 28000 },
-  { month: 'Mar', income: 48000, expenses: 25000 },
-  { month: 'Apr', income: 60000, expenses: 30000 },
-  { month: 'May', income: 55000, expenses: 27000 },
-  { month: 'Jun', income: 65000, expenses: 24550 }
-]
 
 const chartColors = ['#7657F6', '#3985F7', '#19BDA5', '#FFB547', '#F16B9B']
 
@@ -353,32 +344,63 @@ function App() {
     navigate('/admin', { replace: true })
     return null
   }
+  // Derive real monthly trend data dynamically from user's live transactions
+  const monthlyData = useMemo(() => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const map = {}
+    months.forEach((m) => {
+      map[m] = { month: m, income: 0, expenses: 0 }
+    })
+
+    transactions.forEach((tx) => {
+      const d = new Date(tx.rawDate || tx.date)
+      if (!isNaN(d.getTime())) {
+        const m = months[d.getMonth()]
+        if (map[m]) {
+          if (tx.type === 'income') {
+            map[m].income += Number(tx.amount) || 0
+          } else {
+            map[m].expenses += Number(tx.amount) || 0
+          }
+        }
+      }
+    })
+
+    const currentMonthIdx = new Date().getMonth()
+    const result = []
+    for (let i = 5; i >= 0; i--) {
+      const idx = (currentMonthIdx - i + 12) % 12
+      result.push(map[months[idx]])
+    }
+    return result
+  }, [transactions])
+
   const stats = [
     {
       title: 'Total Balance',
       amount: money(balance),
-      change: '+12.5%',
+      change: `${transactions.length} total transaction${transactions.length === 1 ? '' : 's'}`,
       icon: CreditCard,
       color: 'bg-purple-100 text-purple-600'
     },
     {
       title: 'Total Income',
       amount: money(income),
-      change: '+8.2%',
+      change: `${transactions.filter((t) => t.type === 'income').length} income transaction${transactions.filter((t) => t.type === 'income').length === 1 ? '' : 's'}`,
       icon: TrendingUp,
       color: 'bg-blue-100 text-blue-600'
     },
     {
       title: 'Total Expenses',
       amount: money(expenses),
-      change: '-4.3%',
+      change: `${transactions.filter((t) => t.type === 'expense').length} expense${transactions.filter((t) => t.type === 'expense').length === 1 ? '' : 's'} recorded`,
       icon: TrendingDown,
       color: 'bg-pink-100 text-pink-600'
     },
     {
       title: 'Savings',
       amount: money(savings),
-      change: '+15.8%',
+      change: `Savings rate: ${income > 0 ? Math.round(((income - expenses) / income) * 100) : 0}%`,
       icon: PiggyBank,
       color: 'bg-teal-100 text-teal-600'
     }
@@ -679,9 +701,7 @@ function App() {
 
                     <h3 className="mt-5 text-2xl font-bold text-[#20243A]">{stat.amount}</h3>
 
-                    <p className="mt-2 text-xs text-gray-400">
-                      {stat.change} compared to last month
-                    </p>
+                    <p className="mt-2 text-xs text-gray-400">{stat.change}</p>
                   </div>
                 )
               })}
@@ -695,22 +715,32 @@ function App() {
                   <p className="mt-1 text-sm text-gray-400">Monthly income vs expenses</p>
                 </div>
 
-                <div className="h-72 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={monthlyData} barGap={8}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eeeef5" />
-                      <XAxis dataKey="month" axisLine={false} tickLine={false} />
-                      <YAxis
-                        axisLine={false}
-                        tickLine={false}
-                        tickFormatter={(value) => `₹${value / 1000}k`}
-                      />
-                      <Tooltip formatter={(value) => money(value)} />
-                      <Bar dataKey="income" name="Income" fill="#7657F6" radius={[6, 6, 0, 0]} />
-                      <Bar dataKey="expenses" name="Expenses" fill="#19BDA5" radius={[6, 6, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+                {transactions.length === 0 ? (
+                  <div className="flex h-72 flex-col items-center justify-center text-center text-sm text-gray-400">
+                    <CreditCard size={40} className="mb-2.5 opacity-30 text-[#7657F6]" />
+                    <p className="font-medium text-gray-600">No transactions recorded yet</p>
+                    <p className="mt-1 text-xs text-gray-400 max-w-sm">
+                      Your financial overview chart will automatically reflect your income and expenses the moment you add a transaction.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="h-72 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={monthlyData} barGap={8}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eeeef5" />
+                        <XAxis dataKey="month" axisLine={false} tickLine={false} />
+                        <YAxis
+                          axisLine={false}
+                          tickLine={false}
+                          tickFormatter={(value) => `₹${value / 1000}k`}
+                        />
+                        <Tooltip formatter={(value) => money(value)} />
+                        <Bar dataKey="income" name="Income" fill="#7657F6" radius={[6, 6, 0, 0]} />
+                        <Bar dataKey="expenses" name="Expenses" fill="#19BDA5" radius={[6, 6, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
               </div>
 
               {/* Expense breakdown */}
@@ -893,18 +923,28 @@ function App() {
             <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
               <h3 className="text-lg font-bold text-[#20243A]">Income vs Expenses</h3>
               <p className="mt-1 text-sm text-gray-400">Monthly financial trend from your transactions</p>
-              <div className="h-72 mt-6 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={monthlyData} barGap={8}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eeeef5" />
-                    <XAxis dataKey="month" axisLine={false} tickLine={false} />
-                    <YAxis axisLine={false} tickLine={false} tickFormatter={(v) => `₹${v / 1000}k`} />
-                    <Tooltip formatter={(v) => money(v)} />
-                    <Bar dataKey="income" name="Income" fill="#7657F6" radius={[6, 6, 0, 0]} />
-                    <Bar dataKey="expenses" name="Expenses" fill="#19BDA5" radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              {transactions.length === 0 ? (
+                <div className="flex h-72 flex-col items-center justify-center text-center text-sm text-gray-400">
+                  <ChartNoAxesCombined size={40} className="mb-2.5 opacity-30 text-[#7657F6]" />
+                  <p className="font-medium text-gray-600">No transaction data to analyze yet</p>
+                  <p className="mt-1 text-xs text-gray-400 max-w-sm">
+                    Add transactions to unlock visual trends, income-to-expense analysis, and category distributions.
+                  </p>
+                </div>
+              ) : (
+                <div className="h-72 mt-6 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={monthlyData} barGap={8}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eeeef5" />
+                      <XAxis dataKey="month" axisLine={false} tickLine={false} />
+                      <YAxis axisLine={false} tickLine={false} tickFormatter={(v) => `₹${v / 1000}k`} />
+                      <Tooltip formatter={(v) => money(v)} />
+                      <Bar dataKey="income" name="Income" fill="#7657F6" radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="expenses" name="Expenses" fill="#19BDA5" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">

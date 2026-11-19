@@ -14,9 +14,16 @@ router.get('/', async (req, res) => {
   try {
     const query = {}
 
-    // User scoping: if logged in, show user transactions + legacy unassigned transactions
+    // User scoping: when logged in, strictly show ONLY the authenticated user's transactions
     if (req.user) {
-      query.$or = [{ user: req.user._id }, { user: null }, { user: { $exists: false } }]
+      query.user = req.user._id
+    } else {
+      // Unauthenticated requests should never see other users' data or dummy data
+      return res.status(200).json({
+        success: true,
+        count: 0,
+        transactions: []
+      })
     }
 
     // Optional filtering by type (income/expense)
