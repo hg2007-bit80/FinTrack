@@ -1615,7 +1615,11 @@ export default function AdminDashboard({ onExit, onLogout }) {
                       <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
                       <span className="font-medium text-gray-700 w-36 shrink-0">{act.type}</span>
                       <span className="text-gray-500 flex-1 truncate">{act.description}</span>
-                      <span className="text-gray-400 shrink-0">{act.user || '—'}</span>
+                      <span className="text-gray-400 shrink-0 truncate max-w-[150px]">
+                        {typeof act.user === 'object' && act.user !== null
+                          ? (act.user.name || act.user.email || '—')
+                          : (act.user || '—')}
+                      </span>
                     </div>
                   ))}
                 </div>
