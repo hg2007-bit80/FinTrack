@@ -4,7 +4,6 @@ const multer = require('multer')
 const Papa = require('papaparse')
 const Transaction = require('../models/transaction')
 const { optionalAuth } = require('../middleware/auth')
-const { Parser: Json2CSV } = require('json2csv').Parser || {}
 
 router.use(optionalAuth)
 
