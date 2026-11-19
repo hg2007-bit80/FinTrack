@@ -77,7 +77,7 @@ function money(value) {
 }
 
 function App() {
-  const { user, isAuthenticated, logout } = useAuth()
+  const { user, isAuthenticated, loading, logout } = useAuth()
   const { isConnected, maintenance, broadcastAlert, clearBroadcastAlert } = useSocket()
   const {
     transactions,
@@ -137,6 +137,54 @@ function App() {
     amount: '',
     type: 'expense'
   })
+
+  // Derive real monthly trend data dynamically from user's live transactions
+  const monthlyData = useMemo(() => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const map = {}
+    months.forEach((m) => {
+      map[m] = { month: m, income: 0, expenses: 0 }
+    })
+
+    transactions.forEach((tx) => {
+      const d = new Date(tx.rawDate || tx.date)
+      if (!isNaN(d.getTime())) {
+        const m = months[d.getMonth()]
+        if (map[m]) {
+          if (tx.type === 'income') {
+            map[m].income += Number(tx.amount) || 0
+          } else {
+            map[m].expenses += Number(tx.amount) || 0
+          }
+        }
+      }
+    })
+
+    const currentMonthIdx = new Date().getMonth()
+    const result = []
+    for (let i = 5; i >= 0; i--) {
+      const idx = (currentMonthIdx - i + 12) % 12
+      result.push(map[months[idx]])
+    }
+    return result
+  }, [transactions])
+
+  // Synchronize route redirects via useEffect (NEVER inside render body)
+  useEffect(() => {
+    if (loading) return
+
+    if (currentPath === '/login') {
+      if (isAuthenticated) {
+        navigate(user?.role === 'admin' ? '/admin' : '/dashboard', { replace: true })
+      }
+    } else if (currentPath === '/' || currentPath.startsWith('/dashboard')) {
+      if (!isAuthenticated) {
+        navigate('/login', { replace: true })
+      } else if (user?.role === 'admin') {
+        navigate('/admin', { replace: true })
+      }
+    }
+  }, [currentPath, isAuthenticated, user, loading])
 
   // Open modal in Add mode
   const handleOpenAddModal = () => {
@@ -246,19 +294,28 @@ function App() {
     }
   }
 
+  // Full-screen loading while checking token
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#F7F8FC]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-[#7657F6] border-t-transparent" />
+          <p className="text-sm font-medium text-gray-500">Loading FinTrack...</p>
+        </div>
+      </div>
+    )
+  }
+
   // =========================================================================
   // ROUTE 1: /login (Dedicated Shared Authentication Page with Portal Selector)
   // =========================================================================
   if (currentPath === '/login') {
     if (isAuthenticated) {
-      // Role-based auto redirect
-      if (user?.role === 'admin') {
-        navigate('/admin')
-        return null
-      } else {
-        navigate('/dashboard')
-        return null
-      }
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-[#F7F8FC]">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#7657F6] border-t-transparent" />
+        </div>
+      )
     }
 
     return (
@@ -281,11 +338,7 @@ function App() {
         <AuthPage
           initialPortal="admin"
           onAuthSuccess={(portal) => {
-            if (portal === 'admin') {
-              navigate('/admin')
-            } else {
-              navigate('/dashboard')
-            }
+            navigate(portal === 'admin' ? '/admin' : '/dashboard')
           }}
         />
       )
@@ -333,47 +386,26 @@ function App() {
   // ROUTE 3: /dashboard and / (Client Dashboard & Features)
   // =========================================================================
 
-  // Guard: if not authenticated and accessing /dashboard, redirect to /login
-  if (!isAuthenticated && (currentPath === '/dashboard' || currentPath.startsWith('/dashboard'))) {
-    navigate('/login', { replace: true })
-    return null
+  // If not authenticated, render AuthPage immediately (never a blank screen)
+  if (!isAuthenticated) {
+    return (
+      <AuthPage
+        initialPortal="client"
+        onAuthSuccess={(portal) => {
+          navigate(portal === 'admin' ? '/admin' : '/dashboard')
+        }}
+      />
+    )
   }
 
-  // Admin accounts belong strictly to the Admin Dashboard
-  if (isAuthenticated && user?.role === 'admin' && (currentPath === '/dashboard' || currentPath === '/')) {
-    navigate('/admin', { replace: true })
-    return null
+  // If logged-in user is an admin accessing client dashboard, wait for redirect
+  if (user?.role === 'admin') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#F7F8FC]">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#7657F6] border-t-transparent" />
+      </div>
+    )
   }
-  // Derive real monthly trend data dynamically from user's live transactions
-  const monthlyData = useMemo(() => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    const map = {}
-    months.forEach((m) => {
-      map[m] = { month: m, income: 0, expenses: 0 }
-    })
-
-    transactions.forEach((tx) => {
-      const d = new Date(tx.rawDate || tx.date)
-      if (!isNaN(d.getTime())) {
-        const m = months[d.getMonth()]
-        if (map[m]) {
-          if (tx.type === 'income') {
-            map[m].income += Number(tx.amount) || 0
-          } else {
-            map[m].expenses += Number(tx.amount) || 0
-          }
-        }
-      }
-    })
-
-    const currentMonthIdx = new Date().getMonth()
-    const result = []
-    for (let i = 5; i >= 0; i--) {
-      const idx = (currentMonthIdx - i + 12) % 12
-      result.push(map[months[idx]])
-    }
-    return result
-  }, [transactions])
 
   const stats = [
     {
