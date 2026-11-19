@@ -13,8 +13,8 @@ RUN npm install --omit=dev
 # Copy application source code
 COPY . .
 
-# Expose backend API port
-EXPOSE 5000
+# Expose backend API port (5000 local, 10000 Render)
+EXPOSE 5000 10000
 
 # Set environment
 ENV NODE_ENV=production

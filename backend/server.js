@@ -8,7 +8,11 @@ const path = require('path')
 const cookieParser = require('cookie-parser')
 require('dotenv').config({ path: path.join(__dirname, '.env') })
 
-dns.setServers(['1.1.1.1', '8.8.8.8'])
+try {
+  dns.setServers(['1.1.1.1', '8.8.8.8'])
+} catch (err) {
+  console.warn('[DNS] Could not set custom DNS servers, using system default:', err.message)
+}
 
 const app = express()
 const server = http.createServer(app)
