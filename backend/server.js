@@ -5,6 +5,7 @@ const cors = require('cors')
 const dns = require('dns')
 const mongoose = require('mongoose')
 const path = require('path')
+const cookieParser = require('cookie-parser')
 require('dotenv').config({ path: path.join(__dirname, '.env') })
 
 dns.setServers(['1.1.1.1', '8.8.8.8'])
@@ -16,32 +17,39 @@ const server = http.createServer(app)
 const io = new Server(server, {
   cors: {
     origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE']
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    credentials: true
   }
 })
 
 // Attach io instance to express app so routes can broadcast events
 app.set('io', io)
 
-io.on('connection', (socket) => {
-  console.log(`[Socket.IO] Client connected: ${socket.id}`)
-
-  socket.on('disconnect', () => {
-    console.log(`[Socket.IO] Client disconnected: ${socket.id}`)
-  })
-})
+// Initialize Socket.IO Authentication & Live Presence Tracker
+const { initSocketServer } = require('./utils/socketManager')
+initSocketServer(io)
 
 // Middleware
-app.use(cors())
+app.use(cors({ origin: '*', credentials: true }))
 app.use(express.json())
+app.use(cookieParser())
 
 // Import routes
 const authRoutes = require('./routes/authRoutes')
 const transactionRoutes = require('./routes/transactionRoutes')
+const adminRoutes = require('./routes/adminRoutes')
+const budgetRoutes = require('./routes/budgetRoutes')
+const savingsRoutes = require('./routes/savingsRoutes')
+const recurringRoutes = require('./routes/recurringRoutes')
+const csvRoutes = require('./routes/csvRoutes')
+const reportRoutes = require('./routes/reportRoutes')
 
-// Basic / Health routes
+// Import cron job
+const { startCronJobs } = require('./jobs/recurringJob')
+
+// Basic / Health route
 app.get('/', (req, res) => {
-  res.send('Welcome to FinTrack API with Real-Time & Auth!')
+  res.send('Welcome to FinTrack API with Real-Time, Admin Dashboard & Auth!')
 })
 
 app.get('/api/health', (req, res) => {
@@ -56,35 +64,34 @@ app.get('/api/health', (req, res) => {
 
 // Route registrations
 app.use('/api/auth', authRoutes)
+app.use('/api/admin', adminRoutes)
 app.use('/api/transactions', transactionRoutes)
+app.use('/api/budgets', budgetRoutes)
+app.use('/api/savings', savingsRoutes)
+app.use('/api/recurring', recurringRoutes)
+app.use('/api/csv', csvRoutes)
+app.use('/api/reports', reportRoutes)
 
 // Global 404 handler
 app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: `Cannot ${req.method} ${req.originalUrl}`
-  })
+  res.status(404).json({ success: false, message: `Cannot ${req.method} ${req.originalUrl}` })
 })
 
 // Global Error Handler
 app.use((err, req, res, next) => {
   console.error('[Error]', err.stack)
-  res.status(err.status || 500).json({
-    success: false,
-    message: err.message || 'Internal Server Error'
-  })
+  res.status(err.status || 500).json({ success: false, message: err.message || 'Internal Server Error' })
 })
 
-// Start server after MongoDB connection
 const PORT = process.env.PORT || 5000
 
 const startServer = async () => {
   try {
     await mongoose.connect(process.env.MONGO_URI)
     console.log('MongoDB connected successfully!')
-
     server.listen(PORT, () => {
       console.log(`FinTrack server running on port ${PORT} with Socket.IO enabled`)
+      startCronJobs(io)
     })
   } catch (error) {
     console.error('MongoDB connection failed:', error.message)

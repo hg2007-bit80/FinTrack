@@ -24,6 +24,37 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Please provide a password'],
       minlength: [6, 'Password must be at least 6 characters']
+    },
+    role: {
+      type: String,
+      enum: ['user', 'admin'],
+      default: 'user',
+      index: true
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+      index: true
+    },
+    lastLogin: {
+      type: Date,
+      default: Date.now
+    },
+    lastActive: {
+      type: Date,
+      default: Date.now
+    },
+    refreshToken: {
+      type: String,
+      default: null
+    },
+    resetPasswordToken: {
+      type: String,
+      default: null
+    },
+    resetPasswordExpires: {
+      type: Date,
+      default: null
     }
   },
   {

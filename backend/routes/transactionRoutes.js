@@ -1,11 +1,13 @@
 const express = require('express')
 const router = express.Router()
 const Transaction = require('../models/transaction')
-const { optionalAuth } = require('../middleware/auth')
+const { optionalAuth, checkMaintenance } = require('../middleware/auth')
 const { transactionValidation } = require('../middleware/validator')
+const { checkBudgetAlerts } = require('../utils/budgetAlerts')
 
-// Apply optionalAuth to all routes so req.user is populated if token is present
+// Apply optionalAuth and checkMaintenance
 router.use(optionalAuth)
+router.use(checkMaintenance)
 
 // GET: Fetch all transactions (with optional filtering)
 router.get('/', async (req, res) => {
@@ -88,10 +90,38 @@ router.post('/', transactionValidation, async (req, res) => {
       date: date || Date.now()
     })
 
-    // Real-Time Socket.IO broadcast
+    // Real-Time Socket.IO broadcasts
     const io = req.app.get('io')
     if (io) {
+      // 1. User-facing broadcast
       io.emit('transaction:created', transaction)
+
+      // 2. Budget Alert Check
+      if (transaction.type === 'expense') {
+        await checkBudgetAlerts(io, transaction).catch(() => {})
+      }
+
+      // 3. Admin Real-Time Transaction Monitoring Broadcast
+      io.to('admin').emit('admin:transaction', {
+        action: 'created',
+        transactionId: transaction._id,
+        user: req.user
+          ? { id: req.user._id, name: req.user.name, email: req.user.email }
+          : { id: null, name: 'Anonymous', email: 'N/A' },
+        title: transaction.title,
+        type: transaction.type,
+        amount: transaction.amount,
+        category: transaction.category,
+        timestamp: new Date().toISOString()
+      })
+
+      // 4. Admin Activity Feed
+      io.to('admin').emit('admin:activity', {
+        type: 'TRANSACTION_CREATED',
+        description: `${req.user ? req.user.name : 'User'} added ${transaction.type}: "${transaction.title}" (₹${transaction.amount})`,
+        user: req.user ? { id: req.user._id, name: req.user.name, email: req.user.email } : null,
+        timestamp: new Date().toISOString()
+      })
     }
 
     res.status(201).json({
@@ -108,7 +138,7 @@ router.post('/', transactionValidation, async (req, res) => {
   }
 })
 
-// PUT: Update an existing transaction (Full REST API implementation)
+// PUT: Update an existing transaction
 router.put('/:id', transactionValidation, async (req, res) => {
   try {
     const { title, amount, type, category, description, date } = req.body
@@ -133,10 +163,31 @@ router.put('/:id', transactionValidation, async (req, res) => {
       })
     }
 
-    // Real-Time Socket.IO broadcast
     const io = req.app.get('io')
     if (io) {
       io.emit('transaction:updated', transaction)
+
+      // Admin Transaction Monitoring Broadcast
+      io.to('admin').emit('admin:transaction', {
+        action: 'updated',
+        transactionId: transaction._id,
+        user: req.user
+          ? { id: req.user._id, name: req.user.name, email: req.user.email }
+          : { id: null, name: 'Anonymous', email: 'N/A' },
+        title: transaction.title,
+        type: transaction.type,
+        amount: transaction.amount,
+        category: transaction.category,
+        timestamp: new Date().toISOString()
+      })
+
+      // Admin Activity Feed
+      io.to('admin').emit('admin:activity', {
+        type: 'TRANSACTION_UPDATED',
+        description: `${req.user ? req.user.name : 'User'} updated transaction: "${transaction.title}"`,
+        user: req.user ? { id: req.user._id, name: req.user.name, email: req.user.email } : null,
+        timestamp: new Date().toISOString()
+      })
     }
 
     res.status(200).json({
@@ -165,10 +216,31 @@ router.delete('/:id', async (req, res) => {
       })
     }
 
-    // Real-Time Socket.IO broadcast
     const io = req.app.get('io')
     if (io) {
       io.emit('transaction:deleted', { id: req.params.id })
+
+      // Admin Transaction Monitoring Broadcast
+      io.to('admin').emit('admin:transaction', {
+        action: 'deleted',
+        transactionId: req.params.id,
+        user: req.user
+          ? { id: req.user._id, name: req.user.name, email: req.user.email }
+          : { id: null, name: 'Anonymous', email: 'N/A' },
+        title: transaction.title,
+        type: transaction.type,
+        amount: transaction.amount,
+        category: transaction.category,
+        timestamp: new Date().toISOString()
+      })
+
+      // Admin Activity Feed
+      io.to('admin').emit('admin:activity', {
+        type: 'TRANSACTION_DELETED',
+        description: `${req.user ? req.user.name : 'User'} deleted transaction "${transaction.title}"`,
+        user: req.user ? { id: req.user._id, name: req.user.name, email: req.user.email } : null,
+        timestamp: new Date().toISOString()
+      })
     }
 
     res.status(200).json({
