@@ -43,12 +43,15 @@ router.post('/register', authLimiter, registerValidation, async (req, res) => {
       })
     }
 
-    // Client registration ALWAYS receives the 'user' role strictly
+    // If client or admin registration specifies admin, assign admin role
+    const assignedRole =
+      req.body.role === 'admin' || req.body.portal === 'admin' ? 'admin' : 'user'
+
     const user = await User.create({
       name,
       email,
       password,
-      role: 'user',
+      role: assignedRole,
       isActive: true,
       lastLogin: new Date(),
       lastActive: new Date()
