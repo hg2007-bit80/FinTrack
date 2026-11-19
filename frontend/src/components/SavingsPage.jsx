@@ -49,7 +49,7 @@ export default function SavingsPage() {
       setForm({ name: '', targetAmount: '', targetDate: '' })
       await load()
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed')
+      setError(err.response?.data?.message || err.message || 'Failed to create savings goal')
     }
     setSaving(false)
   }

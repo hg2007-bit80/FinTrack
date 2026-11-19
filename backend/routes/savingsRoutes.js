@@ -17,7 +17,7 @@ const validate = (req, res, next) => {
 const goalValidation = [
   body('name').trim().notEmpty().withMessage('Goal name is required'),
   body('targetAmount').isFloat({ min: 1 }).withMessage('Target amount must be > 0'),
-  body('targetDate').isISO8601().withMessage('Valid target date is required'),
+  body('targetDate').optional({ checkFalsy: true }).isISO8601().withMessage('Valid target date is required'),
   validate
 ]
 
@@ -37,9 +37,15 @@ router.get('/', async (req, res) => {
 router.post('/', goalValidation, async (req, res) => {
   try {
     const { name, targetAmount, targetDate, color, icon } = req.body
+    const finalDate = targetDate && !isNaN(new Date(targetDate).getTime())
+      ? new Date(targetDate)
+      : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
+
     const goal = await SavingsGoal.create({
       user: req.user ? req.user._id : null,
-      name, targetAmount, targetDate,
+      name,
+      targetAmount,
+      targetDate: finalDate,
       color: color || '#7657F6',
       icon: icon || '🎯'
     })

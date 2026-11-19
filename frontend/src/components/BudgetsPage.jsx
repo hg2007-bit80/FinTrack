@@ -51,7 +51,7 @@ export default function BudgetsPage() {
       setForm({ category: 'Food', monthlyLimit: '' })
       await load()
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to create budget')
+      setError(err.response?.data?.message || err.message || 'Failed to create budget')
     }
     setSaving(false)
   }
