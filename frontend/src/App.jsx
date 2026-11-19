@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { setNavigateFn } from './context/AuthContext'
 import {
   LayoutDashboard,
   ArrowLeftRight,
@@ -26,7 +27,9 @@ import {
   Upload,
   AlertTriangle,
   Megaphone,
-  ArrowRight
+  ArrowRight,
+  ChevronDown,
+  User
 } from 'lucide-react'
 
 import {
@@ -71,8 +74,11 @@ const menuItems = [
   { name: 'Transactions', icon: ArrowLeftRight },
   { name: 'Budgets', icon: Wallet },
   { name: 'Savings', icon: PiggyBank },
+  { name: 'Analytics', icon: ChartNoAxesCombined },
   { name: 'Recurring', icon: RefreshCw },
-  { name: 'Reports', icon: ChartNoAxesCombined }
+  { name: 'Reports', icon: ChartNoAxesCombined },
+  { name: 'Notifications', icon: Bell },
+  { name: 'Settings', icon: Settings }
 ]
 
 function money(value) {
@@ -110,10 +116,19 @@ function App() {
     return () => window.removeEventListener('popstate', handlePopState)
   }, [])
 
-  const navigate = (to) => {
-    window.history.pushState({}, '', to)
+  const navigate = (to, options = {}) => {
+    if (options.replace) {
+      window.history.replaceState({}, '', to)
+    } else {
+      window.history.pushState({}, '', to)
+    }
     setCurrentPath(to)
   }
+
+  // Register navigate function with AuthContext so logout() can redirect
+  useEffect(() => {
+    setNavigateFn(navigate)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [activePage, setActivePage] = useState('Dashboard')
   const [showModal, setShowModal] = useState(false)
@@ -123,6 +138,7 @@ function App() {
   const [editingId, setEditingId] = useState(null)
   const [formError, setFormError] = useState('')
   const [csvUploading, setCsvUploading] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
 
   const [form, setForm] = useState({
     name: '',
@@ -325,6 +341,12 @@ function App() {
   // =========================================================================
   // ROUTE 3: /dashboard and / (Client Dashboard & Features)
   // =========================================================================
+
+  // Guard: if not authenticated and accessing /dashboard, redirect to /login
+  if (!isAuthenticated && (currentPath === '/dashboard' || currentPath.startsWith('/dashboard'))) {
+    navigate('/login', { replace: true })
+    return null
+  }
   const stats = [
     {
       title: 'Total Balance',
@@ -479,7 +501,7 @@ function App() {
                 </div>
               </div>
               <button
-                onClick={logout}
+                onClick={async () => { await logout() }}
                 title="Log out"
                 className="rounded-lg p-1.5 text-gray-400 hover:bg-white hover:text-red-500 transition"
               >
@@ -578,7 +600,7 @@ function App() {
               </span>
             </div>
 
-            {!isAuthenticated && (
+            {!isAuthenticated ? (
               <button
                 onClick={() => {
                   setAuthModalPortal('client')
@@ -589,6 +611,70 @@ function App() {
                 <LogIn size={16} />
                 Sign In
               </button>
+            ) : (
+              <div className="relative">
+                <button
+                  onClick={() => setUserMenuOpen((prev) => !prev)}
+                  className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 shadow-sm hover:border-[#7657F6] transition"
+                >
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#7657F6] text-xs font-bold text-white uppercase">
+                    {user?.name ? user.name[0] : 'U'}
+                  </div>
+                  <span className="hidden sm:inline font-medium text-gray-800">{user?.name}</span>
+                  <ChevronDown size={14} className="text-gray-400" />
+                </button>
+
+                {userMenuOpen && (
+                  <div
+                    className="absolute right-0 top-12 z-50 w-56 rounded-2xl border border-gray-100 bg-white p-2 shadow-xl animate-fade-in"
+                    onMouseLeave={() => setUserMenuOpen(false)}
+                  >
+                    <div className="border-b border-gray-100 px-3 py-2.5">
+                      <p className="truncate text-xs font-bold text-gray-800">{user?.name}</p>
+                      <p className="truncate text-[10px] text-gray-400">{user?.email}</p>
+                      <span className="mt-1 inline-block rounded bg-purple-100 px-1.5 py-0.5 text-[9px] font-bold text-[#7657F6] uppercase">
+                        {user?.role === 'admin' ? 'Administrator' : 'Client User'}
+                      </span>
+                    </div>
+
+                    <div className="py-1">
+                      <button
+                        onClick={() => {
+                          setActivePage('Settings')
+                          setUserMenuOpen(false)
+                        }}
+                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition"
+                      >
+                        <Settings size={14} /> Account Settings
+                      </button>
+
+                      {user?.role === 'admin' && (
+                        <button
+                          onClick={() => {
+                            setUserMenuOpen(false)
+                            navigate('/admin')
+                          }}
+                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-[#7657F6] hover:bg-purple-50 transition"
+                        >
+                          <ShieldCheck size={14} /> Admin Portal
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="border-t border-gray-100 pt-1">
+                      <button
+                        onClick={async () => {
+                          setUserMenuOpen(false)
+                          await logout()
+                        }}
+                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 transition"
+                      >
+                        <LogOut size={14} /> Log Out
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             <button
@@ -843,11 +929,164 @@ function App() {
         {/* PAGE 4: SAVINGS */}
         {activePage === 'Savings' && <SavingsPage />}
 
-        {/* PAGE 5: RECURRING */}
+        {/* PAGE 5: ANALYTICS */}
+        {activePage === 'Analytics' && (
+          <section className="space-y-6">
+            <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+              <h3 className="text-lg font-bold text-[#20243A]">Income vs Expenses</h3>
+              <p className="mt-1 text-sm text-gray-400">Monthly financial trend from your transactions</p>
+              <div className="h-72 mt-6 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={monthlyData} barGap={8}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eeeef5" />
+                    <XAxis dataKey="month" axisLine={false} tickLine={false} />
+                    <YAxis axisLine={false} tickLine={false} tickFormatter={(v) => `₹${v / 1000}k`} />
+                    <Tooltip formatter={(v) => money(v)} />
+                    <Bar dataKey="income" name="Income" fill="#7657F6" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="expenses" name="Expenses" fill="#19BDA5" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Total Transactions</p>
+                <p className="mt-2 text-3xl font-bold text-[#20243A]">{transactions.length}</p>
+                <p className="mt-1 text-xs text-gray-400">All-time recorded</p>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Savings Rate</p>
+                <p className="mt-2 text-3xl font-bold text-teal-600">
+                  {income > 0 ? Math.round(((income - expenses) / income) * 100) : 0}%
+                </p>
+                <p className="mt-1 text-xs text-gray-400">Income saved this period</p>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Avg. Transaction</p>
+                <p className="mt-2 text-3xl font-bold text-[#20243A]">
+                  {transactions.length > 0 ? money(Math.round((income + expenses) / transactions.length)) : '₹0'}
+                </p>
+                <p className="mt-1 text-xs text-gray-400">Per transaction average</p>
+              </div>
+            </div>
+            {expenseData.length > 0 && (
+              <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+                <h3 className="text-lg font-bold text-[#20243A]">Expense Breakdown</h3>
+                <p className="mt-1 text-sm text-gray-400">Your spending by category</p>
+                <div className="mt-4 h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={expenseData} dataKey="value" nameKey="name" innerRadius={60} outerRadius={90} paddingAngle={4}>
+                        {expenseData.map((entry, index) => (
+                          <Cell key={entry.name} fill={chartColors[index % chartColors.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(v) => money(v)} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="mt-4 space-y-2">
+                  {expenseData.map((item, index) => (
+                    <div key={item.name} className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2 text-gray-500">
+                        <span className="h-3 w-3 rounded-full" style={{ backgroundColor: chartColors[index % chartColors.length] }} />
+                        {item.name}
+                      </div>
+                      <span className="font-semibold text-gray-700">{money(item.value)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* PAGE 6: RECURRING */}
         {activePage === 'Recurring' && <RecurringPage />}
 
-        {/* PAGE 6: REPORTS */}
+        {/* PAGE 7: REPORTS */}
         {activePage === 'Reports' && <ReportsPage />}
+
+        {/* PAGE 8: NOTIFICATIONS */}
+        {activePage === 'Notifications' && (
+          <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+            <div className="mb-5">
+              <h3 className="text-lg font-bold text-gray-800">Notifications</h3>
+              <p className="text-xs text-gray-400 mt-1">Real-time alerts and system messages from your FinTrack account</p>
+            </div>
+            <div className="space-y-3">
+              {broadcastAlert ? (
+                <div className="flex items-start gap-3 rounded-xl border border-purple-200 bg-purple-50 p-4">
+                  <div className="rounded-lg bg-purple-100 p-2 text-[#7657F6]"><Megaphone size={18} /></div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-sm text-gray-800">{broadcastAlert.title}</p>
+                    <p className="text-xs text-gray-600 mt-0.5">{broadcastAlert.message}</p>
+                    <p className="text-[10px] text-gray-400 mt-1">Broadcast from Admin · {broadcastAlert.sender || 'System'}</p>
+                  </div>
+                  <button onClick={clearBroadcastAlert} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100"><X size={14} /></button>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-16 text-center text-gray-400">
+                  <Bell size={40} className="mb-3 opacity-30" />
+                  <p className="font-semibold text-sm">No notifications yet</p>
+                  <p className="text-xs mt-1">Budget alerts and admin broadcasts will appear here in real time.</p>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* PAGE 9: SETTINGS */}
+        {activePage === 'Settings' && (
+          <section className="space-y-5">
+            <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+              <h3 className="text-lg font-bold text-gray-800">Profile Settings</h3>
+              <p className="text-xs text-gray-400 mt-1">Manage your FinTrack account preferences</p>
+              <div className="mt-5 space-y-4">
+                <div className="flex items-center gap-4 rounded-xl bg-gray-50 p-4">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#7657F6] text-xl font-bold text-white uppercase">
+                    {user?.name ? user.name[0] : 'U'}
+                  </div>
+                  <div>
+                    <p className="font-bold text-gray-800">{user?.name}</p>
+                    <p className="text-xs text-gray-500">{user?.email}</p>
+                    <span className="mt-1 inline-block rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-[#7657F6]">
+                      {user?.role === 'admin' ? 'Administrator' : 'Client User'}
+                    </span>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-gray-100 p-4">
+                  <p className="text-xs font-semibold text-gray-700 mb-1">Account Status</p>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    Active & Authenticated
+                  </span>
+                </div>
+                <div className="rounded-xl border border-gray-100 p-4">
+                  <p className="text-xs font-semibold text-gray-700 mb-1">Real-Time Sync</p>
+                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${isConnected ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                    {isConnected ? 'Socket.IO Connected' : 'Reconnecting...'}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-red-100 bg-white p-6 shadow-sm">
+              <h3 className="text-base font-bold text-red-700">Danger Zone</h3>
+              <p className="text-xs text-gray-400 mt-1 mb-4">These actions are permanent and cannot be undone.</p>
+              <button
+                onClick={async () => {
+                  if (window.confirm('Are you sure you want to log out?')) {
+                    await logout()
+                  }
+                }}
+                className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100 transition"
+              >
+                <LogOut size={16} /> Sign Out
+              </button>
+            </div>
+          </section>
+        )}
 
         <p className="mt-8 text-center text-xs text-gray-400">
           © 2026 FinTrack. Role-based client & administrative financial platform.

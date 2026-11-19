@@ -25,7 +25,8 @@ import {
   ShieldAlert,
   Cpu,
   Database,
-  Lock
+  Lock,
+  ChevronDown
 } from 'lucide-react'
 import {
   ResponsiveContainer,
@@ -64,7 +65,7 @@ function money(v) {
   return '₹' + Number(v || 0).toLocaleString('en-IN')
 }
 
-export default function AdminDashboard({ onExit }) {
+export default function AdminDashboard({ onExit, onLogout }) {
   const { user, login, logout, isAuthenticated } = useAuth()
   const { socket, isConnected } = useSocket()
 
@@ -79,6 +80,7 @@ export default function AdminDashboard({ onExit }) {
   const [authMode, setAuthMode] = useState('login')
   const [setupKey, setSetupKey] = useState('fintrack_admin_secret_2026')
   const [isLoggingIn, setIsLoggingIn] = useState(false)
+  const [adminMenuOpen, setAdminMenuOpen] = useState(false)
 
   // 1. Overview state
   const [stats, setStats] = useState(null)
@@ -231,7 +233,7 @@ export default function AdminDashboard({ onExit }) {
     if (!user || user.role !== 'admin') return
 
     if (activeTab === 'User Management') loadUsers()
-    if (activeTab === 'Live Activity') loadActivities()
+    if (activeTab === 'Live Activity' || activeTab === 'Socket.IO Monitoring') loadActivities()
     if (activeTab === 'System Monitoring') loadSystemInfo()
     if (activeTab === 'Audit Logs') loadAuditLogs()
   }, [activeTab, user, loadUsers, loadActivities, loadSystemInfo, loadAuditLogs])
@@ -671,6 +673,7 @@ export default function AdminDashboard({ onExit }) {
     { name: 'Live Activity', icon: Activity },
     { name: 'Transaction Monitoring', icon: ArrowLeftRight },
     { name: 'Real-Time Notifications', icon: Megaphone },
+    { name: 'Socket.IO Monitoring', icon: Radio },
     { name: 'System Monitoring', icon: Server },
     { name: 'Audit Logs', icon: ShieldCheck },
     { name: 'Settings', icon: Settings }
@@ -743,7 +746,7 @@ export default function AdminDashboard({ onExit }) {
               <p className="truncate text-[10px] text-gray-400">{user?.email}</p>
             </div>
             <button
-              onClick={logout}
+              onClick={async () => { await logout() }}
               title="Log Out"
               className="rounded-lg p-1 text-gray-400 hover:text-red-500 hover:bg-white transition"
             >
@@ -786,7 +789,7 @@ export default function AdminDashboard({ onExit }) {
               onClick={() => {
                 if (activeTab === 'Overview') loadStats()
                 if (activeTab === 'User Management') loadUsers()
-                if (activeTab === 'Live Activity') loadActivities()
+                if (activeTab === 'Live Activity' || activeTab === 'Socket.IO Monitoring') loadActivities()
                 if (activeTab === 'System Monitoring') loadSystemInfo()
                 if (activeTab === 'Audit Logs') loadAuditLogs()
               }}
@@ -795,6 +798,68 @@ export default function AdminDashboard({ onExit }) {
             >
               <RefreshCw size={13} /> Refresh
             </button>
+
+            {/* Admin Profile Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setAdminMenuOpen((prev) => !prev)}
+                className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:border-[#7657F6] transition"
+              >
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#7657F6] text-xs font-bold text-white uppercase">
+                  {user?.name ? user.name[0] : 'A'}
+                </div>
+                <span className="hidden sm:inline font-medium text-gray-800">{user?.name}</span>
+                <ChevronDown size={14} className="text-gray-400" />
+              </button>
+
+              {adminMenuOpen && (
+                <div
+                  className="absolute right-0 top-11 z-50 w-56 rounded-2xl border border-gray-100 bg-white p-2 shadow-xl animate-fade-in"
+                  onMouseLeave={() => setAdminMenuOpen(false)}
+                >
+                  <div className="border-b border-gray-100 px-3 py-2.5">
+                    <p className="truncate text-xs font-bold text-gray-800">{user?.name}</p>
+                    <p className="truncate text-[10px] text-gray-400">{user?.email}</p>
+                    <span className="mt-1 inline-block rounded bg-purple-100 px-1.5 py-0.5 text-[9px] font-bold text-[#7657F6] uppercase">
+                      Administrator
+                    </span>
+                  </div>
+
+                  <div className="py-1">
+                    <button
+                      onClick={() => {
+                        setAdminMenuOpen(false)
+                        setActiveTab('Settings')
+                      }}
+                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition"
+                    >
+                      <Settings size={14} /> System Settings
+                    </button>
+                    <button
+                      onClick={() => {
+                        setAdminMenuOpen(false)
+                        onExit()
+                      }}
+                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition"
+                    >
+                      <ArrowLeft size={14} /> Switch to User App
+                    </button>
+                  </div>
+
+                  <div className="border-t border-gray-100 pt-1">
+                    <button
+                      onClick={async () => {
+                        setAdminMenuOpen(false)
+                        await logout()
+                      }}
+                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 transition"
+                    >
+                      <LogOut size={14} /> Log Out
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
@@ -1454,7 +1519,128 @@ export default function AdminDashboard({ onExit }) {
           </div>
         )}
 
-        {/* TAB 6: SYSTEM MONITORING */}
+        {/* TAB 6: SOCKET.IO MONITORING */}
+        {activeTab === 'Socket.IO Monitoring' && (
+          <div className="space-y-6">
+            {/* Live Connection Overview */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                {
+                  label: 'Server Connection',
+                  val: isConnected ? 'Online' : 'Offline',
+                  sub: isConnected ? 'Real-time stream active' : 'Reconnecting...',
+                  color: isConnected ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-500',
+                  icon: Radio
+                },
+                {
+                  label: 'Online Users',
+                  val: stats?.onlineUsersCount ?? 0,
+                  sub: 'Currently connected',
+                  color: 'bg-purple-100 text-purple-600',
+                  icon: Users
+                },
+                {
+                  label: 'Total Users',
+                  val: stats?.totalUsers ?? 0,
+                  sub: 'Registered accounts',
+                  color: 'bg-blue-100 text-blue-600',
+                  icon: Users
+                },
+                {
+                  label: 'Socket Rooms',
+                  val: 'admin + user:*',
+                  sub: 'Role-separated channels',
+                  color: 'bg-teal-100 text-teal-600',
+                  icon: Server
+                }
+              ].map(({ label, val, sub, color, icon: Icon }) => (
+                <div key={label} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-gray-500">{label}</p>
+                    <span className={`rounded-lg p-2 ${color}`}><Icon size={16} /></span>
+                  </div>
+                  <p className="mt-3 text-2xl font-bold text-[#20243A]">{val}</p>
+                  <p className="mt-1 text-xs text-gray-400">{sub}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Socket Architecture */}
+            <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+              <h3 className="text-base font-bold text-[#20243A] mb-4">Socket.IO Architecture</h3>
+              <div className="space-y-3 text-sm">
+                {[
+                  { room: 'admin', desc: 'Admin-only room — receives all system events, activity feed, transaction monitoring, presence counts', badge: 'Admin' },
+                  { room: 'user:<id>', desc: 'Per-user private room — budget alerts, deactivation notices, personal broadcast targets', badge: 'Client' },
+                  { room: 'broadcast', desc: 'Global broadcast room — system-wide notifications sent to all connected users', badge: 'All' }
+                ].map(({ room, desc, badge }) => (
+                  <div key={room} className="flex items-start gap-3 rounded-xl border border-gray-100 p-3">
+                    <code className="shrink-0 rounded-lg bg-purple-50 px-2 py-1 text-xs font-mono text-[#7657F6]">{room}</code>
+                    <p className="text-xs text-gray-600 flex-1">{desc}</p>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${badge === 'Admin' ? 'bg-purple-100 text-purple-600' : badge === 'Client' ? 'bg-blue-100 text-blue-600' : 'bg-teal-100 text-teal-600'}`}>{badge}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Emitted Events */}
+            <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+              <h3 className="text-base font-bold text-[#20243A] mb-4">Real-Time Events</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                {[
+                  { event: 'admin:activity', dir: 'Server → Admin', desc: 'User registrations, logins, logouts' },
+                  { event: 'admin:transaction', dir: 'Server → Admin', desc: 'Transaction CRUD live feed' },
+                  { event: 'presence:count', dir: 'Server → All', desc: 'Online user count updates' },
+                  { event: 'presence:user_online', dir: 'Server → Admin', desc: 'User connected event' },
+                  { event: 'presence:user_offline', dir: 'Server → Admin', desc: 'User disconnected event' },
+                  { event: 'notification:broadcast', dir: 'Server → Clients', desc: 'Admin-initiated broadcasts' },
+                  { event: 'budget:alert', dir: 'Server → User', desc: 'Budget threshold exceeded (80%)' },
+                  { event: 'system:maintenance', dir: 'Server → All', desc: 'Maintenance mode toggle' },
+                  { event: 'user:deactivated', dir: 'Server → User', desc: 'Account deactivation notice' }
+                ].map(({ event, dir, desc }) => (
+                  <div key={event} className="flex items-start gap-2 rounded-xl bg-gray-50 p-3">
+                    <div className="flex-1 min-w-0">
+                      <code className="text-[#7657F6] font-mono">{event}</code>
+                      <p className="text-gray-500 mt-0.5">{desc}</p>
+                    </div>
+                    <span className="shrink-0 rounded bg-gray-200 px-1.5 py-0.5 text-[10px] text-gray-600 whitespace-nowrap">{dir}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Recent Socket Activity (from Live Activity) */}
+            <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-bold text-[#20243A]">Recent Socket Events</h3>
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                  <span className={`h-1.5 w-1.5 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`} />
+                  {isConnected ? 'Live Stream' : 'Offline'}
+                </span>
+              </div>
+              {activities.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 text-gray-400">
+                  <Radio size={32} className="mb-2 opacity-30" />
+                  <p className="text-sm">No socket events captured yet</p>
+                  <p className="text-xs mt-1">Events will appear here as users interact with FinTrack</p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-80 overflow-y-auto">
+                  {activities.slice(0, 15).map((act) => (
+                    <div key={act.id} className="flex items-center gap-3 rounded-xl bg-gray-50 px-3 py-2 text-xs">
+                      <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
+                      <span className="font-medium text-gray-700 w-36 shrink-0">{act.type}</span>
+                      <span className="text-gray-500 flex-1 truncate">{act.description}</span>
+                      <span className="text-gray-400 shrink-0">{act.user || '—'}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 7: SYSTEM MONITORING */}
         {activeTab === 'System Monitoring' && (
           <div className="space-y-6">
             {systemLoading && !systemInfo ? (

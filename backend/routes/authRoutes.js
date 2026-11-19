@@ -347,25 +347,41 @@ router.post('/refresh', async (req, res) => {
 // -------------------------------------------------------------
 // 6. LOGOUT
 // -------------------------------------------------------------
-router.post('/logout', protect, async (req, res) => {
+router.post('/logout', async (req, res) => {
   try {
-    req.user.refreshToken = null
-    await req.user.save()
-    res.clearCookie('refreshToken')
-
-    const io = req.app.get('io')
-    if (io) {
-      io.to('admin').emit('admin:activity', {
-        type: 'USER_LOGOUT',
-        description: `User signed out: ${req.user.name} (${req.user.email})`,
-        user: { id: req.user._id, name: req.user.name, email: req.user.email },
-        timestamp: new Date().toISOString()
-      })
+    let token = null
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+      token = req.headers.authorization.split(' ')[1]
     }
 
-    res.status(200).json({ success: true, message: 'Logged out successfully' })
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, JWT_SECRET)
+        const user = await User.findById(decoded.id)
+        if (user) {
+          user.refreshToken = null
+          await user.save()
+
+          const io = req.app.get('io')
+          if (io) {
+            io.to('admin').emit('admin:activity', {
+              type: 'USER_LOGOUT',
+              description: `User signed out: ${user.name} (${user.email})`,
+              user: { id: user._id, name: user.name, email: user.email },
+              timestamp: new Date().toISOString()
+            })
+          }
+        }
+      } catch {
+        // Token was invalid or expired, continue clearing client state
+      }
+    }
+
+    res.clearCookie('refreshToken')
+    return res.status(200).json({ success: true, message: 'Logged out successfully' })
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Logout failed' })
+    res.clearCookie('refreshToken')
+    return res.status(200).json({ success: true, message: 'Logged out' })
   }
 })
 

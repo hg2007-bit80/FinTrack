@@ -49,8 +49,14 @@ export const TransactionProvider = ({ children }) => {
     }
   }, [])
 
-  // Refetch when user changes (login / logout)
+  // Refetch or reset when user changes (login / logout)
   useEffect(() => {
+    if (!user) {
+      setTransactions([])
+      setLoading(false)
+      setError('')
+      return
+    }
     fetchTransactions()
   }, [user, fetchTransactions])
 

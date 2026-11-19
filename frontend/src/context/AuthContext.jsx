@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import {
   getCurrentUser,
   loginUser,
@@ -6,9 +6,13 @@ import {
   registerAdminUser,
   logoutUser
 } from '../services/authService'
-import { getAuthToken } from '../services/api'
+import { fetchWithAuth, getAuthToken } from '../services/api'
 
 const AuthContext = createContext(null)
+
+// A module-level navigate helper so AuthContext can redirect without a prop dependency
+let _navigateFn = null
+export const setNavigateFn = (fn) => { _navigateFn = fn }
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null)
@@ -24,7 +28,7 @@ export const AuthProvider = ({ children }) => {
           setUser(response.user)
           setToken(storedToken)
         } catch {
-          // Token is invalid/expired
+          // Token is invalid/expired — clear everything
           logoutUser()
           setUser(null)
           setToken(null)
@@ -57,11 +61,27 @@ export const AuthProvider = ({ children }) => {
     return response
   }
 
-  const logout = () => {
+  const logout = useCallback(async () => {
+    // 1. Invalidate refresh token on the backend (best-effort)
+    try {
+      await fetchWithAuth('/api/auth/logout', { method: 'POST' })
+    } catch {
+      // non-blocking — still clear client state
+    }
+
+    // 2. Clear local token & user state
     logoutUser()
     setUser(null)
     setToken(null)
-  }
+
+    // 3. Navigate to login using replaceState so Back button doesn't return to dashboard
+    if (_navigateFn) {
+      _navigateFn('/login', { replace: true })
+    } else {
+      window.history.replaceState({}, '', '/login')
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    }
+  }, [])
 
   return (
     <AuthContext.Provider

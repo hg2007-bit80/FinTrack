@@ -11,7 +11,9 @@ import {
   ChevronDown,
   X,
   Wallet,
-  ArrowRight
+  ArrowRight,
+  Eye,
+  EyeOff
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
@@ -35,6 +37,7 @@ export default function AuthPage({ isModal = false, onClose, initialPortal = 'cl
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
   const [successMessage, setSuccessMessage] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
 
   useEffect(() => {
     setPortal(initialPortal)
@@ -358,16 +361,23 @@ export default function AuthPage({ isModal = false, onClose, initialPortal = 'cl
               <Lock size={17} />
             </span>
             <input
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               placeholder="•••••••• (min 6 characters)"
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              className={`w-full rounded-xl border py-2.5 pl-10 pr-4 text-xs outline-none transition ${
+              className={`w-full rounded-xl border py-2.5 pl-10 pr-10 text-xs outline-none transition ${
                 fieldErrors.password
                   ? 'border-red-400 focus:border-red-500'
                   : 'border-gray-200 focus:border-[#7657F6]'
               }`}
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword((prev) => !prev)}
+              className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 hover:text-gray-600"
+            >
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
           </div>
           {fieldErrors.password && (
             <p className="mt-1 text-[11px] text-red-500">{fieldErrors.password}</p>
@@ -385,16 +395,23 @@ export default function AuthPage({ isModal = false, onClose, initialPortal = 'cl
                 <Lock size={17} />
               </span>
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 placeholder="•••••••• (re-enter password)"
                 value={formData.confirmPassword}
                 onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                className={`w-full rounded-xl border py-2.5 pl-10 pr-4 text-xs outline-none transition ${
+                className={`w-full rounded-xl border py-2.5 pl-10 pr-10 text-xs outline-none transition ${
                   fieldErrors.confirmPassword
                     ? 'border-red-400 focus:border-red-500'
                     : 'border-gray-200 focus:border-[#7657F6]'
                 }`}
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 hover:text-gray-600"
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
             </div>
             {fieldErrors.confirmPassword && (
               <p className="mt-1 text-[11px] text-red-500">{fieldErrors.confirmPassword}</p>
