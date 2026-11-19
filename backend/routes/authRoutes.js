@@ -8,7 +8,11 @@ const rateLimit = require('express-rate-limit')
 const User = require('../models/User')
 const AuditLog = require('../models/AuditLog')
 const { protect, JWT_SECRET } = require('../middleware/auth')
-const { registerValidation, loginValidation } = require('../middleware/validator')
+const {
+  registerValidation,
+  adminRegisterValidation,
+  loginValidation
+} = require('../middleware/validator')
 
 // Rate limiter for auth endpoints
 const authLimiter = rateLimit({
@@ -24,24 +28,28 @@ const generateAccessToken = (id) =>
 const generateRefreshToken = (id) =>
   jwt.sign({ id }, process.env.REFRESH_SECRET || JWT_SECRET + '_refresh', { expiresIn: '7d' })
 
-// POST: /api/auth/register
+// -------------------------------------------------------------
+// 1. CLIENT PORTAL REGISTRATION (Always assigns 'user' role)
+// -------------------------------------------------------------
 router.post('/register', authLimiter, registerValidation, async (req, res) => {
   try {
     const { name, email, password } = req.body
+
     const existingUser = await User.findOne({ email })
     if (existingUser) {
-      return res.status(400).json({ success: false, message: 'A user with this email already exists' })
+      return res.status(400).json({
+        success: false,
+        message: 'A user with this email address already exists'
+      })
     }
 
-    // First user can automatically be granted admin role if no other users exist
-    const userCount = await User.countDocuments()
-    const role = userCount === 0 ? 'admin' : 'user'
-
+    // Client registration ALWAYS receives the 'user' role strictly
     const user = await User.create({
       name,
       email,
       password,
-      role,
+      role: 'user',
+      isActive: true,
       lastLogin: new Date(),
       lastActive: new Date()
     })
@@ -58,12 +66,12 @@ router.post('/register', authLimiter, registerValidation, async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000
     })
 
-    // Broadcast user registered event to admin channel
+    // Broadcast registration event to admin live feed
     const io = req.app.get('io')
     if (io) {
       io.to('admin').emit('admin:activity', {
         type: 'USER_REGISTERED',
-        description: `New user registered: ${user.name} (${user.email})`,
+        description: `New client registered: ${user.name} (${user.email})`,
         user: { id: user._id, name: user.name, email: user.email, role: user.role },
         timestamp: new Date().toISOString()
       })
@@ -71,7 +79,7 @@ router.post('/register', authLimiter, registerValidation, async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'User registered successfully',
+      message: 'Client account registered successfully',
       token: accessToken,
       user: {
         id: user._id,
@@ -86,11 +94,104 @@ router.post('/register', authLimiter, registerValidation, async (req, res) => {
   }
 })
 
-// POST: /api/auth/login
+// -------------------------------------------------------------
+// 2. ADMIN PORTAL REGISTRATION (Requires Backend Invitation Code)
+// -------------------------------------------------------------
+router.post('/admin/register', authLimiter, adminRegisterValidation, async (req, res) => {
+  try {
+    const { name, email, password, invitationCode } = req.body
+
+    // Verify invitation code strictly against backend environment variable
+    const validInvitationCode = process.env.ADMIN_INVITATION_CODE || 'FINTRACK-ADMIN-2026'
+
+    if (!invitationCode || invitationCode.trim() !== validInvitationCode) {
+      return res.status(403).json({
+        success: false,
+        message:
+          'Security verification failed: Invalid administrator invitation code. Admin registration rejected.'
+      })
+    }
+
+    const existingUser = await User.findOne({ email })
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'An account with this email address already exists'
+      })
+    }
+
+    const adminUser = await User.create({
+      name,
+      email,
+      password,
+      role: 'admin',
+      isActive: true,
+      lastLogin: new Date(),
+      lastActive: new Date()
+    })
+
+    const accessToken = generateAccessToken(adminUser._id)
+    const refreshToken = generateRefreshToken(adminUser._id)
+    adminUser.refreshToken = refreshToken
+    await adminUser.save()
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    })
+
+    // Write audit log for administrator creation
+    await AuditLog.create({
+      admin: adminUser._id,
+      adminEmail: adminUser.email,
+      adminName: adminUser.name,
+      action: 'ADMIN_LOGIN',
+      targetType: 'User',
+      targetId: adminUser._id.toString(),
+      targetEmail: adminUser.email,
+      details: { method: 'INVITATION_REGISTRATION' },
+      ipAddress: req.ip || req.headers['x-forwarded-for'] || 'Unknown',
+      userAgent: req.headers['user-agent'] || 'Unknown'
+    }).catch(() => {})
+
+    // Broadcast to admin channel
+    const io = req.app.get('io')
+    if (io) {
+      io.to('admin').emit('admin:activity', {
+        type: 'ADMIN_REGISTERED',
+        description: `New administrator registered: ${adminUser.name} (${adminUser.email})`,
+        user: { id: adminUser._id, name: adminUser.name, email: adminUser.email, role: 'admin' },
+        timestamp: new Date().toISOString()
+      })
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Administrator registered successfully',
+      token: accessToken,
+      user: {
+        id: adminUser._id,
+        name: adminUser.name,
+        email: adminUser.email,
+        role: adminUser.role,
+        isActive: adminUser.isActive
+      }
+    })
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Admin registration failed', error: error.message })
+  }
+})
+
+// -------------------------------------------------------------
+// 3. UNIFIED LOGIN (With Portal Separation & Enforcement)
+// -------------------------------------------------------------
 router.post('/login', authLimiter, loginValidation, async (req, res) => {
   try {
-    const { email, password } = req.body
+    const { email, password, portal } = req.body
     const user = await User.findOne({ email })
+
     if (!user || !(await user.matchPassword(password))) {
       return res.status(401).json({ success: false, message: 'Invalid email or password' })
     }
@@ -100,6 +201,25 @@ router.post('/login', authLimiter, loginValidation, async (req, res) => {
         success: false,
         message: 'Your account has been deactivated. Please contact an administrator.'
       })
+    }
+
+    // Portal matching and enforcement
+    if (portal === 'client') {
+      if (user.role === 'admin') {
+        return res.status(403).json({
+          success: false,
+          message:
+            'This account is registered as an Administrator. Please select the Admin Portal to sign in.'
+        })
+      }
+    } else if (portal === 'admin') {
+      if (user.role !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          message:
+            'Access denied: This account does not have administrator privileges. Please select the Client Portal to sign in.'
+        })
+      }
     }
 
     user.lastLogin = new Date()
@@ -120,7 +240,7 @@ router.post('/login', authLimiter, loginValidation, async (req, res) => {
     if (io) {
       io.to('admin').emit('admin:activity', {
         type: 'USER_LOGIN',
-        description: `User signed in: ${user.name} (${user.email})`,
+        description: `${user.role === 'admin' ? 'Administrator' : 'Client'} signed in: ${user.name} (${user.email})`,
         user: { id: user._id, name: user.name, email: user.email, role: user.role },
         timestamp: new Date().toISOString()
       })
@@ -136,7 +256,7 @@ router.post('/login', authLimiter, loginValidation, async (req, res) => {
         targetType: 'System',
         ipAddress: req.ip || req.headers['x-forwarded-for'] || 'Unknown',
         userAgent: req.headers['user-agent'] || 'Unknown'
-      }).catch(err => console.error('Failed to write audit log:', err.message))
+      }).catch((err) => console.error('Failed to write audit log:', err.message))
     }
 
     res.status(200).json({
@@ -156,7 +276,9 @@ router.post('/login', authLimiter, loginValidation, async (req, res) => {
   }
 })
 
-// POST: /api/auth/setup-admin - Bootstrap or update an admin account securely
+// -------------------------------------------------------------
+// 4. BOOTSTRAP / UPDATE ADMIN ACCOUNT
+// -------------------------------------------------------------
 router.post('/setup-admin', async (req, res) => {
   try {
     const { email, password, name, secretKey } = req.body
@@ -173,7 +295,9 @@ router.post('/setup-admin', async (req, res) => {
     let user = await User.findOne({ email })
     if (!user) {
       if (!password || password.length < 6) {
-        return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' })
+        return res
+          .status(400)
+          .json({ success: false, message: 'Password must be at least 6 characters' })
       }
       user = await User.create({
         name: name || email.split('@')[0],
@@ -201,7 +325,9 @@ router.post('/setup-admin', async (req, res) => {
   }
 })
 
-// POST: /api/auth/refresh
+// -------------------------------------------------------------
+// 5. REFRESH TOKEN
+// -------------------------------------------------------------
 router.post('/refresh', async (req, res) => {
   try {
     const token = req.cookies?.refreshToken
@@ -218,7 +344,9 @@ router.post('/refresh', async (req, res) => {
   }
 })
 
-// POST: /api/auth/logout
+// -------------------------------------------------------------
+// 6. LOGOUT
+// -------------------------------------------------------------
 router.post('/logout', protect, async (req, res) => {
   try {
     req.user.refreshToken = null
@@ -241,7 +369,9 @@ router.post('/logout', protect, async (req, res) => {
   }
 })
 
-// POST: /api/auth/forgot-password
+// -------------------------------------------------------------
+// 7. PASSWORD RESET
+// -------------------------------------------------------------
 router.post('/forgot-password', authLimiter, async (req, res) => {
   try {
     const { email } = req.body
@@ -276,7 +406,6 @@ router.post('/forgot-password', authLimiter, async (req, res) => {
   }
 })
 
-// POST: /api/auth/reset-password/:token
 router.post('/reset-password/:token', async (req, res) => {
   try {
     const hashedToken = crypto.createHash('sha256').update(req.params.token).digest('hex')
@@ -297,7 +426,9 @@ router.post('/reset-password/:token', async (req, res) => {
   }
 })
 
-// GET: /api/auth/me
+// -------------------------------------------------------------
+// 8. CURRENT USER PROFILE
+// -------------------------------------------------------------
 router.get('/me', protect, async (req, res) => {
   try {
     res.status(200).json({

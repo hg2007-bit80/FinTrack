@@ -3,6 +3,7 @@ import {
   getCurrentUser,
   loginUser,
   registerUser,
+  registerAdminUser,
   logoutUser
 } from '../services/authService'
 import { getAuthToken } from '../services/api'
@@ -35,8 +36,8 @@ export const AuthProvider = ({ children }) => {
     initializeAuth()
   }, [])
 
-  const login = async (email, password) => {
-    const response = await loginUser({ email, password })
+  const login = async (email, password, portal = 'client') => {
+    const response = await loginUser({ email, password, portal })
     setUser(response.user)
     setToken(response.token)
     return response
@@ -44,6 +45,13 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (name, email, password) => {
     const response = await registerUser({ name, email, password })
+    setUser(response.user)
+    setToken(response.token)
+    return response
+  }
+
+  const registerAdmin = async (name, email, password, invitationCode) => {
+    const response = await registerAdminUser({ name, email, password, invitationCode })
     setUser(response.user)
     setToken(response.token)
     return response
@@ -61,9 +69,11 @@ export const AuthProvider = ({ children }) => {
         user,
         token,
         isAuthenticated: !!user,
+        isAdmin: user?.role === 'admin',
         loading,
         login,
         register,
+        registerAdmin,
         logout
       }}
     >

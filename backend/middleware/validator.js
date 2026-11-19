@@ -7,7 +7,7 @@ const validate = (req, res, next) => {
     return res.status(400).json({
       success: false,
       message: errors.array()[0].msg,
-      errors: errors.array().map(err => ({
+      errors: errors.array().map((err) => ({
         field: err.path || err.param,
         message: err.msg
       }))
@@ -16,20 +16,53 @@ const validate = (req, res, next) => {
   next()
 }
 
-// Validation rules for User Registration
+// Validation rules for Client User Registration
 const registerValidation = [
   body('name')
     .trim()
-    .notEmpty().withMessage('Name is required')
-    .isLength({ min: 2, max: 50 }).withMessage('Name must be between 2 and 50 characters'),
+    .notEmpty()
+    .withMessage('Name is required')
+    .isLength({ min: 2, max: 50 })
+    .withMessage('Name must be between 2 and 50 characters'),
   body('email')
     .trim()
-    .notEmpty().withMessage('Email is required')
-    .isEmail().withMessage('Please provide a valid email address')
+    .notEmpty()
+    .withMessage('Email is required')
+    .isEmail()
+    .withMessage('Please provide a valid email address')
     .normalizeEmail(),
   body('password')
-    .notEmpty().withMessage('Password is required')
-    .isLength({ min: 6 }).withMessage('Password must be at least 6 characters long'),
+    .notEmpty()
+    .withMessage('Password is required')
+    .isLength({ min: 6 })
+    .withMessage('Password must be at least 6 characters long'),
+  validate
+]
+
+// Validation rules for Administrator Registration
+const adminRegisterValidation = [
+  body('name')
+    .trim()
+    .notEmpty()
+    .withMessage('Name is required')
+    .isLength({ min: 2, max: 50 })
+    .withMessage('Name must be between 2 and 50 characters'),
+  body('email')
+    .trim()
+    .notEmpty()
+    .withMessage('Email is required')
+    .isEmail()
+    .withMessage('Please provide a valid email address')
+    .normalizeEmail(),
+  body('password')
+    .notEmpty()
+    .withMessage('Password is required')
+    .isLength({ min: 6 })
+    .withMessage('Password must be at least 6 characters long'),
+  body('invitationCode')
+    .trim()
+    .notEmpty()
+    .withMessage('Administrator invitation code is required'),
   validate
 ]
 
@@ -37,11 +70,14 @@ const registerValidation = [
 const loginValidation = [
   body('email')
     .trim()
-    .notEmpty().withMessage('Email is required')
-    .isEmail().withMessage('Please provide a valid email address')
+    .notEmpty()
+    .withMessage('Email is required')
+    .isEmail()
+    .withMessage('Please provide a valid email address')
     .normalizeEmail(),
   body('password')
-    .notEmpty().withMessage('Password is required'),
+    .notEmpty()
+    .withMessage('Password is required'),
   validate
 ]
 
@@ -49,31 +85,41 @@ const loginValidation = [
 const transactionValidation = [
   body('title')
     .trim()
-    .notEmpty().withMessage('Title is required')
-    .isLength({ max: 100 }).withMessage('Title cannot exceed 100 characters'),
+    .notEmpty()
+    .withMessage('Title is required')
+    .isLength({ max: 100 })
+    .withMessage('Title cannot exceed 100 characters'),
   body('amount')
-    .notEmpty().withMessage('Amount is required')
-    .isFloat({ min: 0.01 }).withMessage('Amount must be a positive number greater than 0'),
+    .notEmpty()
+    .withMessage('Amount is required')
+    .isFloat({ min: 0.01 })
+    .withMessage('Amount must be a positive number greater than 0'),
   body('type')
     .trim()
-    .notEmpty().withMessage('Type is required')
-    .isIn(['income', 'expense']).withMessage('Type must be either "income" or "expense"'),
+    .notEmpty()
+    .withMessage('Type is required')
+    .isIn(['income', 'expense'])
+    .withMessage('Type must be either "income" or "expense"'),
   body('category')
     .trim()
-    .notEmpty().withMessage('Category is required'),
+    .notEmpty()
+    .withMessage('Category is required'),
   body('description')
     .optional()
     .trim()
-    .isLength({ max: 500 }).withMessage('Description cannot exceed 500 characters'),
+    .isLength({ max: 500 })
+    .withMessage('Description cannot exceed 500 characters'),
   body('date')
     .optional()
-    .isISO8601().withMessage('Date must be a valid ISO8601 date'),
+    .isISO8601()
+    .withMessage('Date must be a valid ISO8601 date'),
   validate
 ]
 
 module.exports = {
   validate,
   registerValidation,
+  adminRegisterValidation,
   loginValidation,
   transactionValidation
 }

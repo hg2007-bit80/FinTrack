@@ -21,10 +21,12 @@ import {
   Radio,
   UserCheck,
   ShieldCheck,
+  ShieldAlert,
   Download,
   Upload,
   AlertTriangle,
-  Megaphone
+  Megaphone,
+  ArrowRight
 } from 'lucide-react'
 
 import {
@@ -44,6 +46,7 @@ import { useAuth } from './context/AuthContext'
 import { useSocket } from './context/SocketContext'
 import { useTransactions } from './context/TransactionContext'
 import AuthModal from './components/AuthModal'
+import AuthPage from './components/AuthPage'
 import AdminDashboard from './components/AdminDashboard'
 import BudgetAlert from './components/BudgetAlert'
 import BudgetsPage from './components/BudgetsPage'
@@ -94,32 +97,28 @@ function App() {
     refresh: refreshTransactions
   } = useTransactions()
 
-  // Routing check for /admin
-  const [isAdminView, setIsAdminView] = useState(
-    typeof window !== 'undefined' && window.location.pathname.startsWith('/admin')
+  // Full client-side routing synchronized with browser URL
+  const [currentPath, setCurrentPath] = useState(
+    typeof window !== 'undefined' ? window.location.pathname : '/'
   )
 
   useEffect(() => {
     const handlePopState = () => {
-      setIsAdminView(window.location.pathname.startsWith('/admin'))
+      setCurrentPath(window.location.pathname)
     }
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
   }, [])
 
-  const navigateToAdmin = () => {
-    window.history.pushState({}, '', '/admin')
-    setIsAdminView(true)
-  }
-
-  const navigateToApp = () => {
-    window.history.pushState({}, '', '/')
-    setIsAdminView(false)
+  const navigate = (to) => {
+    window.history.pushState({}, '', to)
+    setCurrentPath(to)
   }
 
   const [activePage, setActivePage] = useState('Dashboard')
   const [showModal, setShowModal] = useState(false)
   const [showAuthModal, setShowAuthModal] = useState(false)
+  const [authModalPortal, setAuthModalPortal] = useState('client')
   const [isSaving, setIsSaving] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [formError, setFormError] = useState('')
@@ -240,11 +239,92 @@ function App() {
     }
   }
 
-  // If viewing admin route, render the AdminDashboard
-  if (isAdminView) {
-    return <AdminDashboard onExit={navigateToApp} />
+  // =========================================================================
+  // ROUTE 1: /login (Dedicated Shared Authentication Page with Portal Selector)
+  // =========================================================================
+  if (currentPath === '/login') {
+    if (isAuthenticated) {
+      // Role-based auto redirect
+      if (user?.role === 'admin') {
+        navigate('/admin')
+        return null
+      } else {
+        navigate('/dashboard')
+        return null
+      }
+    }
+
+    return (
+      <AuthPage
+        initialPortal="client"
+        onAuthSuccess={(portal) => {
+          navigate(portal === 'admin' ? '/admin' : '/dashboard')
+        }}
+      />
+    )
   }
 
+  // =========================================================================
+  // ROUTE 2: /admin (Role-Protected Admin Dashboard)
+  // =========================================================================
+  if (currentPath.startsWith('/admin')) {
+    // If not authenticated, show unified auth page with Admin Portal preselected
+    if (!isAuthenticated) {
+      return (
+        <AuthPage
+          initialPortal="admin"
+          onAuthSuccess={(portal) => {
+            if (portal === 'admin') {
+              navigate('/admin')
+            } else {
+              navigate('/dashboard')
+            }
+          }}
+        />
+      )
+    }
+
+    // Role guard: Reject ordinary clients from accessing /admin
+    if (user?.role !== 'admin') {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-[#F7F8FC] p-4">
+          <div className="w-full max-w-md rounded-3xl border border-gray-100 bg-white p-8 text-center shadow-xl">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 text-red-600">
+              <ShieldAlert size={32} />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900">Access Denied</h2>
+            <p className="mt-2 text-xs text-gray-500">
+              Your account (<strong>{user?.email}</strong>) is registered as a Client User and does not have administrative permissions to view the Admin Dashboard.
+            </p>
+            <div className="mt-6 flex flex-col gap-2.5">
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="w-full rounded-2xl bg-[#7657F6] py-3 text-xs font-semibold text-white shadow-lg shadow-purple-100 hover:bg-purple-700 transition"
+              >
+                Return to Client Dashboard
+              </button>
+              <button
+                onClick={() => {
+                  logout()
+                  navigate('/login')
+                }}
+                className="w-full rounded-2xl border border-gray-200 py-2.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition"
+              >
+                Sign In with an Admin Account
+              </button>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    // Authenticated administrator -> render AdminDashboard
+    return <AdminDashboard onExit={() => navigate('/dashboard')} />
+  }
+
+  // =========================================================================
+  // ROUTE 3: /dashboard and / (Client Dashboard & Features)
+  // =========================================================================
   const stats = [
     {
       title: 'Total Balance',
@@ -334,7 +414,7 @@ function App() {
           </div>
 
           <p className="mt-8 mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
-            Menu
+            Client Portal
           </p>
 
           <nav className="space-y-1.5">
@@ -343,7 +423,12 @@ function App() {
               return (
                 <button
                   key={item.name}
-                  onClick={() => setActivePage(item.name)}
+                  onClick={() => {
+                    setActivePage(item.name)
+                    if (currentPath !== '/dashboard') {
+                      navigate('/dashboard')
+                    }
+                  }}
                   className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-sm font-medium transition ${
                     activePage === item.name
                       ? 'bg-[#7657F6] text-white shadow-lg shadow-purple-100'
@@ -357,10 +442,10 @@ function App() {
             })}
           </nav>
 
-          {/* Admin Panel Direct Link */}
+          {/* Admin Portal Quick Link */}
           <div className="mt-6 pt-4 border-t border-gray-100">
             <button
-              onClick={navigateToAdmin}
+              onClick={() => navigate('/admin')}
               className="flex w-full items-center justify-between rounded-xl border border-purple-200 bg-purple-50/60 px-3.5 py-2.5 text-left text-xs font-semibold text-[#7657F6] hover:bg-purple-100/70 transition shadow-sm"
             >
               <span className="flex items-center gap-2">
@@ -403,11 +488,14 @@ function App() {
             </div>
           ) : (
             <button
-              onClick={() => setShowAuthModal(true)}
+              onClick={() => {
+                setAuthModalPortal('client')
+                setShowAuthModal(true)
+              }}
               className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#7657F6] bg-purple-50/50 px-4 py-2.5 text-xs font-semibold text-[#7657F6] hover:bg-[#7657F6] hover:text-white transition"
             >
               <LogIn size={15} />
-              Sign In / Register
+              Sign In / Select Portal
             </button>
           )}
         </div>
@@ -415,6 +503,27 @@ function App() {
 
       {/* Main content */}
       <main className="min-w-0 flex-1 p-5 md:p-8 overflow-y-auto">
+        {/* Administrator Notice if an Admin accesses Client Dashboard */}
+        {user?.role === 'admin' && (
+          <div className="mb-6 flex items-center justify-between gap-3 rounded-2xl border border-purple-200 bg-purple-50 p-4 text-xs text-purple-900 shadow-sm">
+            <div className="flex items-center gap-2.5">
+              <ShieldCheck size={18} className="shrink-0 text-[#7657F6]" />
+              <div>
+                <p className="font-bold">Logged in as Administrator</p>
+                <p className="text-purple-700">
+                  You are viewing the Client Portal. Access live metrics, user management, and Socket.IO activity in the Admin Dashboard.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => navigate('/admin')}
+              className="flex items-center gap-1.5 rounded-xl bg-[#7657F6] px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-purple-700 transition"
+            >
+              Open Admin Dashboard <ArrowRight size={14} />
+            </button>
+          </div>
+        )}
+
         {/* Maintenance Mode Banner */}
         {maintenance?.active && (
           <div className="mb-6 flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900 shadow-sm">
@@ -471,7 +580,10 @@ function App() {
 
             {!isAuthenticated && (
               <button
-                onClick={() => setShowAuthModal(true)}
+                onClick={() => {
+                  setAuthModalPortal('client')
+                  setShowAuthModal(true)
+                }}
                 className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm hover:border-[#7657F6] hover:text-[#7657F6] transition"
               >
                 <LogIn size={16} />
@@ -738,7 +850,7 @@ function App() {
         {activePage === 'Reports' && <ReportsPage />}
 
         <p className="mt-8 text-center text-xs text-gray-400">
-          © 2026 FinTrack. Real-time personal finance platform with Admin Dashboard.
+          © 2026 FinTrack. Role-based client & administrative financial platform.
         </p>
       </main>
 
@@ -838,8 +950,15 @@ function App() {
         </div>
       )}
 
-      {/* Authentication Modal */}
-      <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} />
+      {/* Unified Authentication Modal with Portal Selection */}
+      <AuthModal
+        isOpen={showAuthModal}
+        initialPortal={authModalPortal}
+        onClose={() => setShowAuthModal(false)}
+        onAuthSuccess={(portal) => {
+          navigate(portal === 'admin' ? '/admin' : '/dashboard')
+        }}
+      />
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import { fetchWithAuth, setAuthToken } from './api'
 
-// Register a new user
+// Register a new client user (role: 'user')
 export const registerUser = async (userData) => {
   const data = await fetchWithAuth('/api/auth/register', {
     method: 'POST',
@@ -14,7 +14,21 @@ export const registerUser = async (userData) => {
   return data
 }
 
-// Log in an existing user
+// Register an administrator with invitation code
+export const registerAdminUser = async (adminData) => {
+  const data = await fetchWithAuth('/api/auth/admin/register', {
+    method: 'POST',
+    body: JSON.stringify(adminData)
+  })
+
+  if (data.token) {
+    setAuthToken(data.token)
+  }
+
+  return data
+}
+
+// Log in an existing user with portal verification
 export const loginUser = async (credentials) => {
   const data = await fetchWithAuth('/api/auth/login', {
     method: 'POST',
