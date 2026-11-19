@@ -42,6 +42,7 @@ import {
 } from 'recharts'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
+import api from '../services/api'
 import {
   getAdminStats,
   getAdminAnalytics,
@@ -74,6 +75,9 @@ export default function AdminDashboard({ onExit }) {
   const [adminEmail, setAdminEmail] = useState('')
   const [adminPassword, setAdminPassword] = useState('')
   const [authError, setAuthError] = useState('')
+  const [setupSuccess, setSetupSuccess] = useState('')
+  const [authMode, setAuthMode] = useState('login')
+  const [setupKey, setSetupKey] = useState('fintrack_admin_secret_2026')
   const [isLoggingIn, setIsLoggingIn] = useState(false)
 
   // 1. Overview state
@@ -334,6 +338,7 @@ export default function AdminDashboard({ onExit }) {
   const handleAdminLogin = async (e) => {
     e.preventDefault()
     setAuthError('')
+    setSetupSuccess('')
     setIsLoggingIn(true)
     try {
       const res = await login(adminEmail, adminPassword)
@@ -341,7 +346,28 @@ export default function AdminDashboard({ onExit }) {
         setAuthError('Access denied: You do not have administrator permissions.')
       }
     } catch (err) {
-      setAuthError(err.message || 'Login failed')
+      setAuthError(err.message || 'Invalid email or password')
+    } finally {
+      setIsLoggingIn(false)
+    }
+  }
+
+  // Handle Admin Setup / Password Reset
+  const handleAdminSetup = async (e) => {
+    e.preventDefault()
+    setAuthError('')
+    setSetupSuccess('')
+    setIsLoggingIn(true)
+    try {
+      await api.post('/auth/setup-admin', {
+        email: adminEmail.trim(),
+        password: adminPassword,
+        secretKey: setupKey.trim()
+      })
+      setSetupSuccess('Admin account configured successfully! Signing in...')
+      await login(adminEmail.trim(), adminPassword)
+    } catch (err) {
+      setAuthError(err.response?.data?.message || err.message || 'Setup failed')
     } finally {
       setIsLoggingIn(false)
     }
@@ -455,10 +481,51 @@ export default function AdminDashboard({ onExit }) {
             </p>
           </div>
 
+          {/* Mode Tabs */}
+          <div className="mb-4 flex rounded-xl bg-gray-100 p-1 text-xs">
+            <button
+              type="button"
+              onClick={() => {
+                setAuthMode('login')
+                setAuthError('')
+                setSetupSuccess('')
+              }}
+              className={`flex-1 rounded-lg py-1.5 font-semibold transition ${
+                authMode === 'login'
+                  ? 'bg-white text-[#7657F6] shadow-sm'
+                  : 'text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              Admin Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAuthMode('setup')
+                setAuthError('')
+                setSetupSuccess('')
+              }}
+              className={`flex-1 rounded-lg py-1.5 font-semibold transition ${
+                authMode === 'setup'
+                  ? 'bg-white text-[#7657F6] shadow-sm'
+                  : 'text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              Setup / Set Password
+            </button>
+          </div>
+
           {authError && (
             <div className="mb-4 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
               <AlertTriangle size={16} className="shrink-0" />
               <span>{authError}</span>
+            </div>
+          )}
+
+          {setupSuccess && (
+            <div className="mb-4 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">
+              <CheckCircle2 size={16} className="shrink-0" />
+              <span>{setupSuccess}</span>
             </div>
           )}
 
@@ -483,7 +550,7 @@ export default function AdminDashboard({ onExit }) {
                 </button>
               </div>
             </div>
-          ) : (
+          ) : authMode === 'login' ? (
             <form onSubmit={handleAdminLogin} className="space-y-4">
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-600">Admin Email</label>
@@ -515,6 +582,70 @@ export default function AdminDashboard({ onExit }) {
                 className="w-full rounded-xl bg-[#7657F6] py-3 text-sm font-semibold text-white shadow-lg shadow-purple-100 hover:bg-purple-700 disabled:opacity-60 transition"
               >
                 {isLoggingIn ? 'Authenticating...' : 'Sign In as Administrator'}
+              </button>
+
+              <button
+                type="button"
+                onClick={onExit}
+                className="w-full text-center text-xs text-gray-400 hover:text-gray-600"
+              >
+                ← Return to FinTrack App
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleAdminSetup} className="space-y-4">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">
+                  Target Admin Email
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                  placeholder="parth@gmail.com"
+                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-[#7657F6]"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">
+                  New Admin Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  placeholder="•••••••• (min 6 characters)"
+                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-[#7657F6]"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">
+                  Admin Setup Secret Key
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={setupKey}
+                  onChange={(e) => setSetupKey(e.target.value)}
+                  placeholder="fintrack_admin_secret_2026"
+                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-[#7657F6]"
+                />
+                <p className="mt-1 text-[10px] text-gray-400">
+                  Default key: <code className="bg-gray-100 px-1 py-0.5 rounded">fintrack_admin_secret_2026</code>
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoggingIn}
+                className="w-full rounded-xl bg-[#7657F6] py-3 text-sm font-semibold text-white shadow-lg shadow-purple-100 hover:bg-purple-700 disabled:opacity-60 transition"
+              >
+                {isLoggingIn ? 'Configuring...' : 'Set Admin Password & Sign In'}
               </button>
 
               <button

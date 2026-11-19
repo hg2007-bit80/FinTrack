@@ -156,28 +156,44 @@ router.post('/login', authLimiter, loginValidation, async (req, res) => {
   }
 })
 
-// POST: /api/auth/setup-admin - Bootstrap an admin account securely
+// POST: /api/auth/setup-admin - Bootstrap or update an admin account securely
 router.post('/setup-admin', async (req, res) => {
   try {
-    const { email, secretKey } = req.body
+    const { email, password, name, secretKey } = req.body
     const expectedSecret = process.env.ADMIN_SETUP_KEY || 'fintrack_admin_secret_2026'
 
     if (secretKey !== expectedSecret) {
       return res.status(403).json({ success: false, message: 'Invalid admin setup key' })
     }
 
-    const user = await User.findOne({ email })
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' })
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required' })
     }
 
-    user.role = 'admin'
-    user.isActive = true
-    await user.save()
+    let user = await User.findOne({ email })
+    if (!user) {
+      if (!password || password.length < 6) {
+        return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' })
+      }
+      user = await User.create({
+        name: name || email.split('@')[0],
+        email,
+        password,
+        role: 'admin',
+        isActive: true
+      })
+    } else {
+      user.role = 'admin'
+      user.isActive = true
+      if (password && password.length >= 6) {
+        user.password = password
+      }
+      await user.save()
+    }
 
     res.status(200).json({
       success: true,
-      message: `User ${user.email} promoted to Administrator successfully.`,
+      message: `User ${user.email} is now an active Administrator.`,
       user: { id: user._id, name: user.name, email: user.email, role: user.role }
     })
   } catch (error) {
